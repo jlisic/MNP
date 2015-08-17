@@ -3,13 +3,19 @@ mnp <- function(formula, data = parent.frame(), choiceX = NULL,
                 invcdf = FALSE, trace = TRUE, n.draws = 5000, p.var = "Inf", 
                 p.df = n.dim+1, p.scale = 1, coef.start = 0,
                 cov.start = 1, burnin = 0, thin = 0, verbose = FALSE) {   
+
   call <- match.call()
+
   mf <- match.call(expand.dots = FALSE)
+
   mf$choiceX <- mf$cXnames <- mf$base <- mf$n.draws <- mf$latent <-
     mf$p.var <- mf$p.df <- mf$p.scale <- mf$coef.start <- mf$invcdf <-
       mf$trace <- mf$cov.start <- mf$verbose <- mf$burnin <- mf$thin <- NULL   
+
   mf[[1]] <- as.name("model.frame")
+
   mf$na.action <- 'na.pass'
+
   mf <- eval.parent(mf)
 
   ## fix this parameter
@@ -149,14 +155,51 @@ mnp <- function(formula, data = parent.frame(), choiceX = NULL,
   # recoding NA into -1
   Y[is.na(Y)] <- -1
 
-  param <- .C("cMNPgibbs", as.integer(n.dim),
-              as.integer(n.cov), as.integer(n.obs), as.integer(n.draws),
-              as.double(p.mean), as.double(p.prec), as.integer(p.df),
-              as.double(p.scale*p.alpha0), as.double(X), as.integer(Y), 
-              as.double(coef.start), as.double(cov.start), 
-              as.integer(p.imp), as.integer(invcdf),
-              as.integer(burnin), as.integer(keep), as.integer(trace),
-              as.integer(verbose), as.integer(MoP), as.integer(latent),
+
+
+n.dim <<- n.dim
+n.cov <<- n.cov
+n.obs <<- n.obs
+n.draws <<- n.draws
+p.mean <<- p.mean
+p.prec <<- p.prec
+p.df   <<- p.df
+p.scale <<- p.scale
+p.alpha0 <<- p.alpha0
+X.mnp <<- X
+Y.mnp <<- Y 
+coef.start <<- coef.start
+cov.start <<- cov.start
+p.imp <<- p.imp
+invcdf <<- invcdf
+burnin <<- burnin 
+keep <<- keep
+trace.mnp <<- trace
+verbose <<- verbose
+MoP <<- MoP
+
+
+  param <- .C("cMNPgibbs", 
+              as.integer(n.dim),
+              as.integer(n.cov), 
+              as.integer(n.obs), 
+              as.integer(n.draws),
+              as.double(p.mean), 
+              as.double(p.prec), 
+              as.integer(p.df),
+              as.double(p.scale*p.alpha0), 
+              as.double(X), 
+              as.integer(Y), 
+              as.double(coef.start), 
+              as.double(cov.start), 
+              as.integer(p.imp), 
+              as.integer(invcdf),
+              as.integer(burnin), 
+              as.integer(keep), 
+              as.integer(trace),
+              as.integer(verbose), 
+              as.integer(MoP), 
+              as.integer(latent),
               pdStore = double(n.par*floor((n.draws-burnin)/keep)),
               PACKAGE="MNP")$pdStore 
   param <- matrix(param, ncol = n.par,
@@ -183,5 +226,77 @@ mnp <- function(formula, data = parent.frame(), choiceX = NULL,
   return(res)
 }
   
+
+TruncNorm <- function( lb, ub, mu, sigma, invcdf) { 
+
+  x <- 0
+  
+  result <- .C("RTruncNorm",  
+               as.double(x),
+               as.double(lb), 
+               as.double(ub), 
+               as.double(mu), 
+               as.double(sigma), 
+               as.integer(invcdf)
+               )
+  return(result[[1]])
+}
+
+
+
+
+SWP <- function( x, k ) {
+
+  size <- NROW(x)
+  if( size == 1) return(1/x)
+  if( size != ncol(x)) stop("Error: not a square matrix")
+
+  x <- c(x)
+
+  result <- .C( 'RSWP',
+  as.double(x),      # The Matrix to work on 
+  as.integer(k),     # The row to sweep 
+  as.integer(size)   # The dim. of X 
+  )
+
+  return( matrix(result[[1]], nrow=size))
+}
+
+
+
+
+RMVN <- function( mu, sigma) { 
+
+  n <- NROW(sigma)
+  x <- rep(0,n) 
+  if( length(mu) != n) stop("mu does not have correct dimensions")
+  
+  result <- .C("RMVN",  
+               as.double(x),
+               as.double(mu), 
+               as.double(sigma), 
+               as.integer(n)
+               )
+  return(result[[1]])
+}
+
+
+
+
+RWISH <- function( S, v) { 
+
+  n <- NROW(S)
+  x <- rep(0,n^2) 
+  if( v <= n) stop("invalid value of df")
+  
+  result <- .C("RWISH",  
+               as.double(x),
+               as.double(S), 
+               as.integer(v),
+               as.integer(n)
+               )
+
+  return(matrix(result[[1]],nrow=n))
+}
 
 

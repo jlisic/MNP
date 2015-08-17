@@ -10,6 +10,31 @@
 #include "rand.h"
 
 /*  The Sweep operator */
+/*
+ * Goodnight, American Statistician 1979 is a good reference.
+ * If you also happen to have Little and Rubin's book "statistical 
+ * analysis with missing data" handy, it's in there on page 148.
+ *
+ * example for the 3x3 matrix A:
+ *
+ * a11 a12 a13
+ * a21 a22 a23
+ * a31 a32 a33
+ *
+ * Sweep(A,1)
+ *
+ * -1/a11     | a12/a11            a13/a11
+ *  ----------|--------------------------------------
+ *            | a22 - a12*a12/a11  a23 - a13*a12/a11 
+ *            |                    a33 - a13*a13/a11 
+ *
+ * Note: due to symmetry (we are only working with square symmetric matricies here
+ *       only the upper triangular matrix is calucluated
+ *
+ * Note: there are a few different versions floating around in the literature.
+ * Note (jjl): IIRC there are some things that can be done for symmetric matricies
+ *   but I forgot what they where :( 
+ */
 void SWP(
 	 double **X,             /* The Matrix to work on */
 	 int k,                  /* The row to sweep */
@@ -33,19 +58,57 @@ void SWP(
   
 }
 
+/* R interface */
+void RSWP( 
+   double * x,
+   int * kPtr,
+   int * sizePtr
+   ) {
+
+  size_t i; 
+  double ** X;
+
+  X = calloc( *sizePtr, sizeof(double *) );
+  for(i = 0; i < *sizePtr; i++) X[i] = &x[ *sizePtr * i ];
+
+  SWP(X, *kPtr, *sizePtr);
+
+  free(X);
+  return;
+} 
+
+
 
 /* inverting a matrix */
-void dinv(double **X,
-	  int	size,
-	  double **X_inv)
-{
+void dinv(
+  double **X,
+  int	size,
+  double **X_inv
+  ) {
   int i,j, k, errorM;
-  double *pdInv = doubleArray(size*size);
+  double *pdInv = doubleArray(size*(size+1)/2);
 
   for (i = 0, j = 0; j < size; j++) 
-    for (k = 0; k <= j; k++) 
-      pdInv[i++] = X[k][j];
-  F77_CALL(dpptrf)("U", &size, pdInv, &errorM);
+    for (k = 0; k <= j; k++) pdInv[i++] = X[k][j];
+
+  /* ref: http://www.netlib.org/lapack/explore-html/d2/d45/dpptrf_8f.html */
+  /* 
+   * dpprtf:
+   * Ax = b
+   * U     - Upper triangle of A is stored
+   * &size - order of the matrix A 
+   * pdInv - in/out, using N*N_1)/2 elements (N is an int).
+   *   e.g.
+   *         a11 a12 a13 a14
+   *             a22 a23 a24
+   *                 a33 a34
+   *                     a44
+   *
+   * error = 0 successful
+   *       < 0 (-i) the "ith" value had an illegal value
+   *       > 0 (i) the leading minor of order i is not PD
+   */
+  F77_CALL(dpptrf)("U", &size, pdInv, &errorM);  /* cholesky factorization via lapack */
   if (!errorM) {
     F77_CALL(dpptri)("U", &size, pdInv, &errorM);
     if (errorM) {
@@ -57,6 +120,13 @@ void dinv(double **X,
     Rprintf("LAPACK dpptrf failed, %d\n", errorM);
     error("Exiting from dinv().\n");
   }
+  /* I like this code :)
+   *
+   * 0 1 2 3 
+   *   5 6 7
+   *     8 9
+   *       10
+   */
   for (i = 0, j = 0; j < size; j++) {
     for (k = 0; k <= j; k++) {
       X_inv[j][k] = pdInv[i];
@@ -78,6 +148,23 @@ void dcholdc(double **X, int size, double **L)
   for (j = 0, i = 0; j < size; j++) 
     for (k = 0; k <= j; k++) 
       pdTemp[i++] = X[k][j];
+  /* ref: http://www.netlib.org/lapack/explore-html/d2/d45/dpptrf_8f.html */
+  /* 
+   * dpprtf:
+   * Ax = b
+   * U     - Upper triangle of A is stored
+   * &size - order of the matrix A 
+   * pdInv - in/out, using N*N_1)/2 elements (N is an int).
+   *   e.g.
+   *         a11 a12 a13 a14
+   *             a22 a23 a24
+   *                 a33 a34
+   *                     a44
+   *
+   * error = 0 successful
+   *       < 0 (-i) the "ith" value had an illegal value
+   *       > 0 (i) the leading minor of order i is not PD
+   */
   F77_CALL(dpptrf)("U", &size, pdTemp, &errorM);
   if (errorM) {
     Rprintf("LAPACK dpptrf failed, %d\n", errorM);

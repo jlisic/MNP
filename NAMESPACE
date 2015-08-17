@@ -1,7 +1,7 @@
 useDynLib(MNP)
 
 importFrom(MASS, mvrnorm)
-export(mnp, coef.mnp, cov.mnp, predict.mnp, summary.mnp, print.summary.mnp)
+export(mnp, coef.mnp, cov.mnp, predict.mnp, summary.mnp, print.summary.mnp, TruncNorm, SWP, RMVN, RWISH)
 
 S3method(coef, mnp)
 S3method(summary, mnp)

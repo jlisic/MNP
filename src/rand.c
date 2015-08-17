@@ -43,11 +43,18 @@ double sTruncNorm(
 }
 
 
+
+
+
 /* Sample from a univariate truncated Normal distribution 
    (truncated both from above and below): choose either inverse cdf
    method or rejection sampling method. For rejection sampling, 
    if the range is too far from mu, it uses standard rejection
-   sampling algorithm with exponential envelope function. */ 
+   sampling algorithm with exponential envelope function. 
+ 
+   MNP.R default is to not use the inverese cdf method 
+
+   */ 
 double TruncNorm(
 		 double lb,  /* lower bound */ 
 		 double ub,  /* upper bound */
@@ -105,6 +112,46 @@ double TruncNorm(
 }
 
 
+void RTruncNorm(
+     double * x,
+		 double * lb,  /* lower bound */ 
+		 double * ub,  /* upper bound */
+		 double * mu,  /* mean */
+		 double * var, /* variance */
+		 int * invcdf  /* use inverse cdf method? */
+  ) {
+
+  GetRNGstate();
+  *x = TruncNorm(*lb, *ub, *mu, *var, *invcdf); 
+  PutRNGstate();
+
+  return;
+}
+
+
+
+/* r interface for rMVN */
+void RMVN(
+    double * sample,
+    double * mean,
+    double * var,
+    int * sizePtr
+    ) {
+
+  size_t i;
+  double ** Var = calloc( *sizePtr, sizeof(double *) );
+  for(i = 0; i < *sizePtr; i++) Var[i] = &var[ *sizePtr * i ];
+  
+  GetRNGstate();
+  rMVN(sample, mean, Var , *sizePtr); 
+  PutRNGstate();
+
+  free(Var);
+
+  return;
+}
+
+
 /* Sample from the MVN dist */
 void rMVN(                      
 	  double *Sample,         /* Vector for the sample */
@@ -135,6 +182,55 @@ void rMVN(
   FreeMatrix(Model,size+1);
 }
 
+
+/* r interface for rWish */
+void RWISH(
+    double * sample,
+    double * s,
+    int * dfPtr,
+    int * sizePtr
+    ) {
+
+  size_t i,j;
+  double ** Sample = calloc( *sizePtr, sizeof(double *) );
+  double ** S = calloc( *sizePtr, sizeof(double *) );
+  for(i = 0; i < *sizePtr; i++) Sample[i] = &sample[ *sizePtr * i ];
+  for(i = 0; i < *sizePtr; i++) S[i] = &s[ *sizePtr * i ];
+  
+  GetRNGstate();
+
+/************** debug *******************/ 
+Rprintf("S: \n");
+for(i=0;i<*sizePtr;i++) {
+  Rprintf("%d:\t",i);
+  for(j=0;j<*sizePtr;j++){
+    Rprintf("%f\t", S[i][j]);
+  }
+  Rprintf("\n");
+  Rprintf("df = %d\n", *dfPtr);
+}
+/************** debug *******************/ 
+
+  rWish(Sample, S, *dfPtr , *sizePtr); 
+
+/************** debug *******************/ 
+Rprintf("Sample: \n");
+for(i=0;i<*sizePtr;i++) {
+  Rprintf("%d:\t",i);
+  for(j=0;j<*sizePtr;j++){
+    Rprintf("%f\t", Sample[i][j]);
+  }
+  Rprintf("\n");
+}
+/************** debug *******************/ 
+
+  PutRNGstate();
+
+  free(Sample);
+  free(S);
+
+  return;
+}
 
 /* Sample from a wish dist */
 /* Odell, P. L. and Feiveson, A. H. ``A Numerical Procedure to Generate
