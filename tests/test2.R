@@ -419,18 +419,16 @@ for( iter in 1:10 ) {
     for( i in 1:n ) {
       zStart <- n*(k-1) + (i*J-1)  # start of z indexes of latent vriable for obs i at time r 
       zStop  <- n*(k-1) + (i*J)    # end of z indexes of latent variable for obs i at time r
-      zOut   <- n*(k-1) + i*J -2 + p # output for index i parameter p  
 
       zRange <- zStart:zStop
 
       for( p in 1:J) {
+        zOut   <- n*(k-1) + i*J -2 + p # output for index i parameter p  
   
         cvar <- 1/SigInv[p,p]
-       
         cmean <- XBeta[zRange][p] -  (  z[zRange] - XBeta[(i*J-1):(i*J)])[-p] * SigInv[p,-p] * cvar
-    
+        
         zMax = max( max( z[zRange][-p] ),0)
-                        
         if( Y[n*(k-1) + i]  == p +1 ) {
           z[zOut] <- TruncNorm( zMax, cmean + 1000 * sqrt(cvar), cmean, cvar, 0 ) 
         } else {

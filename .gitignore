@@ -15,6 +15,10 @@ vignettes/*.pdf
 
 *.Rproj
 
+# vim stuff
+*.swp
+*.swo
+
 # compiled files 
 src/*.o
 src/*.so
