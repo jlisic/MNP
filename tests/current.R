@@ -23,7 +23,92 @@ getLatentState <- function( z ) {
   )
 }
 
+# this is a function that takes a list of indexes and creates
+# a block diagonal matrix out of them where each block is of
+# size 1 by x.max
+#
+# | -- j=1 -- | -- j=2 -- | -- ... -- | -- j=J -- |  as diag
+# | p1,...,pP | 
 
+designElement <- function(x,x.max) {
+  # create a blank block 
+  blankBlock <- matrix(0,nrow=length(x),ncol=length(x)*x.max)
+  for( i in 1:length(x))  blankBlock[ i, (i-1)*x.max + x[i] ] <- 1
+  
+  return( blankBlock )
+}
+
+
+# it is assumed that the matrix x has columns that are increasing with respect to year
+# the result is a list of prior years from left to right t-1 t-2 ... t-k
+# the prior states matrix is assumed to be in the order t-1 to t-k.
+createDesignMatrix <- function(x, nPriorStates, priorStatesMatrix=NULL, deleteNoMatch=FALSE, autocorrelation=FALSE) {
+
+  n <- NROW(x) 
+  m <- length(x)/n
+  J <- max(x) - 1 
+
+  X.new <- c()
+  for( i in 1:(m - nPriorStates) ) {
+    
+    start.index <- (i-1)*n + 1
+    stop.index  <- (i+nPriorStates)*n
+    
+    X.new <- rbind(
+      X.new,
+      cbind(
+        i,
+        matrix(x[start.index:stop.index],nrow=n)[,(1+nPriorStates):1]
+      )
+    )
+  }
+
+  # at this point we have a matrix with time index, current state, and prior states
+  colnames(X.new) <- c( 'i', sprintf("%d", -1 * 0:nPriorStates) ) 
+
+  # if prior state matrix is missing create one
+  if( is.null(priorStatesMatrix) ) {
+    priorStatesMatrix <- matrix(1:(J+1),J+1)
+    if( nPriorStates > 1 ) {
+      for( i in 2:nPriorStates ) 
+        priorStatesMatrix <- cbind( kronecker( priorStatesMatrix, matrix(1,J+1,1) ), rep(1:(J+1), (J+1)^(i-1)) )
+    }
+  }
+
+  # fixes for prior state matrix
+  if( is.null( dim(priorStatesMatrix) ) ) priorStatesMatrix <- c(priorStatesMatrix,ncol=1)
+  P <- nrow(priorStatesMatrix)
+  priorStatesMatrix <- cbind( priorStatesMatrix, 1:P)
+  colnames( priorStatesMatrix) <- c(sprintf("%d",-1* 1:nPriorStates), 'p')
+  
+
+  # merge data together
+  X.new <- join( as.data.frame(X.new), as.data.frame(priorStatesMatrix), by=sprintf("%d",-1*1:nPriorStates) )
+
+
+  if( is.na( sum(X.new[,'p']) ) ) {
+    P <- P + 1
+    X.new[ is.na(X.new[,'p']) ,'p'] = P
+    cat("Creating prior state for non-matching prior states.\n")
+  } 
+
+
+  # generate design matrix
+  X.design <- c()
+  for( i in 1:nrow(X.new) ) {
+    if( autocorrelation ) { 
+      de <- designElement( rep( X.new[i,'p'] ,J), P) 
+      de.offset <- matrix(0,ncol=n)
+      de.offset[1,ceiling(i%%n)] <- 1 
+      de <- kronecker( de.offset, de )  
+    } else {
+      de <- designElement( rep( X.new[i,'p'] ,J), P) 
+    }
+    X.design <- rbind( X.design,de  )
+  }
+
+  return(list(map=X.new, design=X.design))
+}
 
 # example 
 #a <- matrix( sample(1:3,size=15,replace=T), ncol=3)
@@ -291,7 +376,8 @@ r <- ncol(Y.all) - nPriorStates
 P <- (J+1)*(J+1) 
 
 # Sigma for transition
-Sigma0  <- diag(P)   # Sigma for the prior states
+BetaStar  <- matrix( 0 , nrow= n*J*P) 
+#Sigma0  <- diag(P)   # Sigma for the prior states
 SigmaJ0 <- diag(J)   # Sigma for the latent variable dim in Beta prior
 
 # hyper parameters for Sigma.inv
@@ -302,8 +388,7 @@ alpha0 <- 1
 
 
 ######## initial parameters ##############
-#Beta      <- rep(0, n*J*P)
-Beta <- rep(Beta0, n*J)
+Beta      <- rep(0, n*J*P)
 SigInv <- diag(J)
 X <- createDesignMatrix(Y.all, 
                         nPriorStates, 
@@ -330,7 +415,6 @@ set.seed(400)
 
 # get initial z
 z <- rnorm(r*n*J)
-cmeans <- c()
 
 #### start iter here ####
 
@@ -378,19 +462,15 @@ startTime <- proc.time()
           if( zMax <= LowerBound) LowerBound <- zMax - 1000*sqrt(cvar)
           z[zOut] <- TruncNorm( LowerBound, zMax, cmean, cvar, 0 ) 
         }
-
-        cmeans <- c(cmeans, cmean)
   
       }
     }
   }
   
   zSquiggle <- z * sqrt(alpha.z) 
-  print( sprintf("Z, run time = %f", (proc.time() - startTime)[3] ) )
 
- # result 
- if( F ) { 
 
+print( sprintf("Z, run time = %f", (proc.time() - startTime)[3] ) )
 ################# Generate Lambda ###################### 
 startTime <- proc.time()
 
@@ -432,8 +512,7 @@ startTime <- proc.time()
       SSY2[SSX.index] <- SSY2[SSX.index] + ZSigInv[(k-1)*n + i] 
     }
   }
-
-
+  
 
 print( sprintf("Alpha for Beta ZSigInv, run time = %f", (proc.time() - startTime)[3] ) )
 startTime <- proc.time()
@@ -496,8 +575,6 @@ print( sprintf("Wishart, run time = %f", (proc.time() - startTime)[3] ) )
   alpha.Sigma <- mean(diag(Sigma))
   Sigma <- Sigma / alpha.Sigma
   SigInv <- SigInv * alpha.Sigma 
-
-  }
   z <- zSquiggle / sqrt(alpha.Sigma)
 
   z.save     <- cbind( z.save, z)

@@ -3,7 +3,7 @@
   Multinomial Probit Models by Kosuke Imai and David A. van Dyk.
   Copyright: GPL version 2 or later.
 *******************************************************************/
- #define MNPDEBUG
+#define MNPDEBUG
 
 #include <string.h>
 #include <stddef.h>
@@ -75,6 +75,9 @@ void cMNPgibbs(
   double alpha2;             /* alpha^2: Inv-chisq df=nu0 */
   double ss;                 /* scale parameter for alpha^2 */
   int i, j, k, l, main_loop; /* used for loops */
+
+  /* for debugging */
+  int print_n_cov; /* used to print out the first few columns of items that use n_cov, default is 7 */
 
   /* temporay storages */
   int itemp, itempMax, itempMin, *ivtemp, itempS = 0, itempP=ftrunc((double) n_gen/10); 
@@ -189,14 +192,16 @@ void cMNPgibbs(
   for(i=0;i<n_samp;i++) Rprintf("%d ", y[i]);
   Rprintf("\n");
 
+  /*
   Rprintf("Initial W: \n",i);
   for(i=0;i<n_samp;i++) {
     Rprintf("%d:\t",i);
-    for(j=0;j<n_dim;j++){
+    for(j=0;j<=n_dim;j++){
       Rprintf("%f\t", W[i][j]);
     }
     Rprintf("\n",i);
   }
+  */
   Rprintf("Initial S: \n",i);
   for(i=0;i<n_dim;i++) {
     Rprintf("%d:\t",i);
@@ -242,6 +247,8 @@ void cMNPgibbs(
     alpha2=ss / (double) rchisq( (double) nu0 * n_dim );
 
   /************** debug *******************/ 
+  print_n_cov = (int) fmin2( 7.0, (float) n_cov);
+
 #ifdef MNPDEBUG
     Rprintf("--------------------- %d --------------\n", main_loop);
     Rprintf("nu0[%d]: %d\n",    main_loop, nu0);
@@ -505,7 +512,7 @@ Rprintf("trace ss= %f\n",ss); /* chiscale on R */
     dcholdc(SigInv,n_dim,mtemp1);
  
 /************** debug *******************/ 
-#ifdef MNPDEBUG
+#ifdef MNPDEBUG2
 Rprintf("mtemp1: \n",i);
 for(i=0;i<n_dim;i++) {
   Rprintf("%d:\t",i);
@@ -525,13 +532,13 @@ for(i=0;i<n_dim;i++) {
           for(l=0;l<=n_cov;l++) Xstar[i*n_dim+k][l]+=mtemp1[j][k]*X[i*n_dim+j][l];
   
 /************** debug *******************/ 
-#ifdef MNPDEBUG
+#ifdef MNPDEBUG2
     
 Rprintf("X: \n",i);
 for(i=0;i<n_samp;i++) {
   for(j=0;j<n_dim;j++){
     Rprintf("%d\t%d:\t",i,j);
-    for(k=0;k<=n_dim;k++){
+    for(k=0;k<=n_cov;k++){
     Rprintf("%f\t", X[i*n_dim + j][k]);
     }
   Rprintf("\n");
@@ -541,7 +548,7 @@ Rprintf("XL: \n",i);
 for(i=0;i<n_samp;i++) {
   for(j=0;j<n_dim;j++){
     Rprintf("%d\t%d:\t",i,j);
-    for(k=0;k<=n_dim;k++){
+    for(k=0;k<=n_cov;k++){
     //  Rprintf("%f\t", X[i*n_dim + j][k]);
       Rprintf("%f\t", Xstar[i*n_dim + j][k]);
     }
@@ -562,15 +569,17 @@ for(i=0;i<n_samp;i++) {
 	      for(k=0;k<=n_cov;k++)
 	        for(l=0;l<=n_cov;l++) SS[k][l]+=Xstar[i*n_dim+j][k]*Xstar[i*n_dim+j][l];
  /************** debug *******************/ 
-#ifdef MNPDEBUG
+#ifdef MNPDEBUG2
+
 Rprintf("SS: \n",i);
-for(i=0;i<=n_dim;i++) {
+for(i=0;i<=print_n_cov;i++) {
   Rprintf("%d:\t",i);
-  for(j=0;j<=n_dim;j++){
+  for(j=0;j<=print_n_cov;j++){
     Rprintf("%f\t", SS[i][j]);
   }
   Rprintf("\n",i);
 }
+
 #endif
 /************** debug *******************/ 
 
@@ -578,11 +587,12 @@ for(i=0;i<=n_dim;i++) {
       for(k=0;k<=n_cov;k++)
 	      for(l=0;l<=n_cov;l++) SS[k][l]+=Xstar[n_samp*n_dim+j][k]*Xstar[n_samp*n_dim+j][l];
   /************** debug *******************/ 
-#ifdef MNPDEBUG
+#ifdef MNPDEBUG2
+
 Rprintf("SS: \n",i);
-for(i=0;i<=n_dim;i++) {
+for(i=0;i<=print_n_cov;i++) {
   Rprintf("%d:\t",i);
-  for(j=0;j<=n_dim;j++){
+  for(j=0;j<=print_n_cov;j++){
     Rprintf("%f\t", SS[i][j]);
   }
   Rprintf("\n",i);
@@ -596,6 +606,20 @@ for(i=0;i<=n_dim;i++) {
     /* draw alpha2 given Sigma and W */
     ss+=SS[n_cov][n_cov];   
     alpha2=ss/(double)rchisq((double)(n_samp+nu0)*n_dim);
+  
+/************** debug *******************/ 
+#ifdef MNPDEBUG2
+
+Rprintf("Post SWPSS: \n",i);
+for(i=0;i<=print_n_cov;i++) {
+  Rprintf("%d:\t",i);
+  for(j=0;j<=print_n_cov;j++){
+    Rprintf("%f\t", SS[i][j]);
+  }
+  Rprintf("\n",i);
+}
+#endif
+/************** debug *******************/ 
 
 /************** debug *******************/ 
 #ifdef MNPDEBUG
@@ -613,9 +637,9 @@ Rprintf("alpha2 = %f ss= %f df = (%d + %d) * %d = %d\n", alpha2, ss, n_samp, nu0
 /************** debug *******************/ 
 #ifdef MNPDEBUG
 Rprintf("Vbeta: \n",i);
-for(i=0;i<n_cov;i++) {
+for(i=0;i<print_n_cov;i++) {
   Rprintf("%d:\t",i);
-  for(j=0;j<n_cov;j++){
+  for(j=0;j<print_n_cov;j++){
     Rprintf("%f\t", Vbeta[i][j]);
   }
   Rprintf("\n",i);
@@ -626,6 +650,13 @@ for(i=0;i<n_cov;i++) {
     
 /************** debug *******************/ 
 #ifdef MNPDEBUG
+Rprintf("mbeta: \n",i);
+for(i=0;i<n_cov;i++) {
+  Rprintf("%d:\t%f",i,mbeta[i] );
+  Rprintf("\n",i);
+}
+#endif
+#ifdef MNPDEBUG2
 Rprintf("beta: \n",i);
 for(i=0;i<n_cov;i++) {
   Rprintf("%d:\t%f",i,beta[i] );
@@ -643,7 +674,7 @@ for(i=0;i<n_cov;i++) {
       }
 
 /************** debug *******************/ 
-#ifdef MNPDEBUG
+#ifdef MNPDEBUG2
 /*
 Rprintf("epsilon: \n",i);
 for(i=0;i< n_dim*n_samp;i++) {
@@ -662,11 +693,11 @@ for(i=0;i< n_dim*n_samp;i++) {
 	      for(k=0;k<n_dim;k++) R[j][k]+=epsilon[i*n_dim+j]*epsilon[i*n_dim+k];
 
 /************** debug *******************/ 
-#ifdef MNPDEBUG
+#ifdef MNPDEBUG2
 Rprintf("R: \n",i);
-for(i=0;i<n_cov;i++) {
+for(i=0;i<n_dim;i++) {
   Rprintf("%d:\t",i);
-  for(j=0;j<n_cov;j++){
+  for(j=0;j<n_dim;j++){
     Rprintf("%f\t", R[i][j]);
   }
   Rprintf("\n",i);
@@ -681,11 +712,11 @@ for(i=0;i<n_cov;i++) {
     dinv(mtemp1,n_dim,mtemp2);
 
 /************** debug *******************/ 
-#ifdef MNPDEBUG
+#ifdef MNPDEBUG2
 Rprintf("mtemp2 (Wishart): \n");
-for(i=0;i<n_cov;i++) {
+for(i=0;i<n_dim;i++) {
   Rprintf("%d:\t",i);
-  for(j=0;j<n_cov;j++){
+  for(j=0;j<n_dim;j++){
     Rprintf("%f\t", mtemp2[i][j]);
   }
   Rprintf("\n");
@@ -697,19 +728,19 @@ Rprintf("nu0 + n_samp = %d, itrace = %d \n", n_samp + nu0, *itrace);
     dinv(SigInv,n_dim,Sigma);
 
 /************** debug *******************/ 
-#ifdef MNPDEBUG
+#ifdef MNPDEBUG2
 Rprintf("Sigma (unidentified): \n");
-for(i=0;i<n_cov;i++) {
+for(i=0;i<n_dim;i++) {
   Rprintf("%d:\t",i);
-  for(j=0;j<n_cov;j++){
+  for(j=0;j<n_dim;j++){
     Rprintf("%f\t", Sigma[i][j]);
   }
   Rprintf("\n");
 }
 Rprintf("SigInv (unidentified): \n");
-for(i=0;i<n_cov;i++) {
+for(i=0;i<n_dim;i++) {
   Rprintf("%d:\t",i);
-  for(j=0;j<n_cov;j++){
+  for(j=0;j<n_dim;j++){
     Rprintf("%f\t", SigInv[i][j]);
   }
   Rprintf("\n");
@@ -738,24 +769,24 @@ for(i=0;i<n_cov;i++) {
       for(j=0;j<n_dim;j++) W[i][j]=X[i*n_dim+j][n_cov]/sqrt(alpha2);
 
 /************** debug *******************/ 
-#ifdef MNPDEBUG
+#ifdef MNPDEBUG2
 Rprintf("beta: \n",i);
 for(i=0;i<n_cov;i++) {
   Rprintf("%d:\t%f",i,beta[i] );
   Rprintf("\n",i);
 }
 Rprintf("Sigma (identified): \n");
-for(i=0;i<n_cov;i++) {
+for(i=0;i<n_dim;i++) {
   Rprintf("%d:\t",i);
-  for(j=0;j<n_cov;j++){
+  for(j=0;j<n_dim;j++){
     Rprintf("%f\t", Sigma[i][j]);
   }
   Rprintf("\n");
 }
 Rprintf("SigInv (identified): \n");
-for(i=0;i<n_cov;i++) {
+for(i=0;i<n_dim;i++) {
   Rprintf("%d:\t",i);
-  for(j=0;j<n_cov;j++){
+  for(j=0;j<n_dim;j++){
     Rprintf("%f\t", SigInv[i][j]);
   }
   Rprintf("\n");
@@ -763,7 +794,7 @@ for(i=0;i<n_cov;i++) {
 Rprintf("W (identified): \n",i);
 for(i=0;i<n_samp;i++) {
   Rprintf("%d:\t",i);
-  for(j=0;j<n_dim;j++){
+  for(j=0;j<=n_dim;j++){
     Rprintf("%f\t", W[i][j]);
   }
   Rprintf("\n",i);

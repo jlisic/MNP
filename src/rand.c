@@ -200,6 +200,7 @@ void RWISH(
   GetRNGstate();
 
 /************** debug *******************/ 
+#ifdef MNPDEBUG
 Rprintf("S: \n");
 for(i=0;i<*sizePtr;i++) {
   Rprintf("%d:\t",i);
@@ -209,11 +210,13 @@ for(i=0;i<*sizePtr;i++) {
   Rprintf("\n");
   Rprintf("df = %d\n", *dfPtr);
 }
+#endif
 /************** debug *******************/ 
 
   rWish(Sample, S, *dfPtr , *sizePtr); 
 
 /************** debug *******************/ 
+#ifdef MNPDEBUG
 Rprintf("Sample: \n");
 for(i=0;i<*sizePtr;i++) {
   Rprintf("%d:\t",i);
@@ -222,6 +225,7 @@ for(i=0;i<*sizePtr;i++) {
   }
   Rprintf("\n");
 }
+#endif
 /************** debug *******************/ 
 
   PutRNGstate();
